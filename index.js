@@ -28,12 +28,43 @@ async function run() {
          "Pinged your deployment. You successfully connected to MongoDB!"
       );
 
+      //    Database and collections
+      const database = client.db("studySphere");
+      const usersCollection = database.collection("users_collection");
+
       //    Home route
       app.get("/", async (req, res) =>
          res.send("Danke, dass du mich geschlagen hast.")
       );
+
+      //    save user to users_collection
+      app.post("/post-user", async (req, res) => {
+         try {
+            const userData = req.body;
+
+            //  for new user via social login
+            const socialLogin = req.query.social ? true : false;
+            if (socialLogin) {
+               const filter = { userEmail: userData.userEmail };
+               const result = await usersCollection.updateOne(
+                  filter,
+                  { $setOnInsert: userData },
+                  { upsert: true }
+               );
+               res.send(result);
+               return;
+            }
+            //  manually signuped new user
+            const result = await usersCollection.insertOne(userData);
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
    } finally {
-      await client.close();
+      //   await client.close();
    }
 }
 run().catch(console.dir);
