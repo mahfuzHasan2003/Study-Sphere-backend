@@ -31,6 +31,9 @@ async function run() {
       //    Database and collections
       const database = client.db("studySphere");
       const usersCollection = database.collection("users_collection");
+      const studySessionsCollection = database.collection(
+         "study_sessions_collection"
+      );
 
       //    Home route
       app.get("/", async (req, res) =>
@@ -60,6 +63,57 @@ async function run() {
          } catch (error) {
             res.status(500).send({
                message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      //    get user role
+      app.get("/get-user-role", async (req, res) => {
+         try {
+            const query = { userEmail: req.query.email };
+            const user = await usersCollection.findOne(query);
+            res.send(user);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // get all study sessions for specific tutor
+      app.get("/tutor-study-sessions", async (req, res) => {
+         try {
+            const query = {
+               tutorEmail: req.query.email,
+               status: req.query.status,
+            };
+
+            const studeySessions = await studySessionsCollection
+               .find(query)
+               .toArray();
+            res.send(studeySessions);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // post study session from tutor
+      app.post("/add-study-session", async (req, res) => {
+         try {
+            const data = req.body;
+            const result = await studySessionsCollection.insertOne(data);
+            res.status(200).send({
+               success: true,
+               message:
+                  "Succesfully added a new study session! Please wait until the admin approves.",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message:
+                  `Internal Server Error - ${error.message}` ||
+                  "An error occurred while adding the study session.",
             });
          }
       });
