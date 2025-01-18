@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 3000;
 require("dotenv").config();
@@ -33,6 +33,9 @@ async function run() {
       const usersCollection = database.collection("users_collection");
       const studySessionsCollection = database.collection(
          "study_sessions_collection"
+      );
+      const studentNotesCollection = database.collection(
+         "student_notes_collection"
       );
 
       //    Home route
@@ -80,6 +83,9 @@ async function run() {
          }
       });
 
+      // ---------------------------------------------------------------------
+      // -------------------- API for Tutors -------------------
+      // ------ API for create session page --------
       // get all study sessions for specific tutor
       app.get("/tutor-study-sessions", async (req, res) => {
          try {
@@ -111,9 +117,74 @@ async function run() {
             });
          } catch (error) {
             res.status(500).send({
-               message:
-                  `Internal Server Error - ${error.message}` ||
-                  "An error occurred while adding the study session.",
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // ---------------------------------------------------------------------
+      // -------------------- API for students -------------------
+      // ------ API for notes page --------
+      // get notes of specific student
+      app.get("/student-notes/:email", async (req, res) => {
+         try {
+            const query = { email: req.params.email };
+            const studentNotes = await studentNotesCollection
+               .find(query)
+               .sort({ date: -1 })
+               .toArray();
+            res.send(studentNotes);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // add note to db
+      app.post("/student-notes", async (req, res) => {
+         try {
+            const note = req.body;
+            const result = await studentNotesCollection.insertOne(note);
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // delete a note
+      app.delete("/delete-note/:id", async (req, res) => {
+         try {
+            const result = await studentNotesCollection.deleteOne({
+               _id: new ObjectId(req.params.id),
+            });
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // edit a note
+      app.patch("/update-note/:id", async (req, res) => {
+         try {
+            const { title, description } = req.body;
+            const query = { _id: new ObjectId(req.params.id) };
+            const updatedData = {
+               $set: {
+                  title,
+                  description,
+                  date: new Date().toISOString(),
+               },
+            };
+            const result = await studentNotesCollection.updateOne(
+               query,
+               updatedData
+            );
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
             });
          }
       });
