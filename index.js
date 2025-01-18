@@ -188,6 +188,20 @@ async function run() {
             });
          }
       });
+
+      // ---------------------------------------------------------------------
+      // -------------------- API for admin -------------------
+      // get all users
+      app.get("/get-all-users", async (req, res) => {
+         try {
+            const users = await usersCollection.find().toArray();
+            res.send(users);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
    } finally {
       //   await client.close();
    }
