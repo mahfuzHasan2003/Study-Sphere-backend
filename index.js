@@ -192,10 +192,46 @@ async function run() {
       // ---------------------------------------------------------------------
       // -------------------- API for admin -------------------
       // get all users
-      app.get("/get-all-users", async (req, res) => {
+      app.get("/get-all-users/:email", async (req, res) => {
          try {
-            const users = await usersCollection.find().toArray();
+            const { searchQuery = "", roleFilter = "all" } = req.query;
+            const { email = "" } = req.params;
+            const filters = {
+               userEmail: { $ne: email },
+            };
+            // search filtering
+            if (searchQuery) {
+               filters.$or = [
+                  { userName: { $regex: searchQuery, $options: "i" } },
+                  { userEmail: { $regex: searchQuery, $options: "i" } },
+               ];
+            }
+            // role filtering
+            if (roleFilter !== "all") {
+               filters.userRole = roleFilter;
+            }
+            const users = await usersCollection.find(filters).toArray();
             res.send(users);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // update role by admin
+      app.patch("/update-user-role/:id", async (req, res) => {
+         try {
+            const result = await usersCollection.updateOne(
+               {
+                  _id: new ObjectId(req.params.id),
+               },
+               {
+                  $set: {
+                     userRole: req.body.newRole,
+                  },
+               }
+            );
+            res.send(result);
          } catch (error) {
             res.status(500).send({
                message: `Internal Server Error - ${error.message}`,
