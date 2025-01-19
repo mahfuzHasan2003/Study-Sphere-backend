@@ -108,7 +108,7 @@ async function run() {
       // post study session from tutor
       app.post("/add-study-session", async (req, res) => {
          try {
-            const data = req.body;
+            const data = { requestAttempt: 1, ...req.body };
             const result = await studySessionsCollection.insertOne(data);
             res.status(200).send({
                success: true,
@@ -232,6 +232,78 @@ async function run() {
                }
             );
             res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // get all pending sessions
+      app.get("/pending-sessions", async (req, res) => {
+         try {
+            const pensionSessions = await studySessionsCollection
+               .find({ status: "pending" })
+               .toArray();
+            res.send(pensionSessions);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // get all approved sessions
+      app.get("/approved-sessions", async (req, res) => {
+         try {
+            const approvedSessions = await studySessionsCollection
+               .find({ status: "approved" })
+               .toArray();
+            res.send(approvedSessions);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // update study session status and add rejection reason, feedback
+      app.put("/update-session/:id", async (req, res) => {
+         const { id } = req.params;
+         const { action, additionalData } = req.body;
+
+         try {
+            let updatedData = {};
+            if (action === "approve") {
+               updatedData = {
+                  $set: {
+                     status: "approved",
+                     registrationFee: parseInt(additionalData.registrationFee),
+                  },
+                  $unset: {
+                     requestAttempt: "",
+                     rejectionReason: "",
+                     rejectionFeedback: "",
+                  },
+               };
+            } else if (action === "reject") {
+               updatedData = {
+                  $set: {
+                     status: "rejected",
+                     rejectionReason: additionalData.rejectionReason,
+                     rejectionFeedback: additionalData.rejectionFeedback,
+                  },
+               };
+            }
+            await studySessionsCollection.updateOne(
+               {
+                  _id: new ObjectId(id),
+               },
+               updatedData
+            );
+            res.status(200).send({
+               success: true,
+               message: `Successfully ${
+                  action === "approve" ? "approved" : "rejected"
+               } the session`,
+            });
          } catch (error) {
             res.status(500).send({
                message: `Internal Server Error - ${error.message}`,
