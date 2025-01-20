@@ -310,6 +310,22 @@ async function run() {
             });
          }
       });
+      // delete session by admin
+      app.delete("/delete-session-by-admin/:id", async (req, res) => {
+         try {
+            await studySessionsCollection.deleteOne({
+               _id: new ObjectId(req.params.id),
+            });
+            res.status(200).send({
+               success: true,
+               message: "Successfully deleted the session",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
    } finally {
       //   await client.close();
    }
