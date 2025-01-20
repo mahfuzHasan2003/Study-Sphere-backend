@@ -90,8 +90,8 @@ async function run() {
       app.get("/tutor-study-sessions", async (req, res) => {
          try {
             const query = {
-               tutorEmail: req.query.email,
-               status: req.query.status,
+               tutorEmail: req?.query?.email,
+               status: req?.query?.status,
             };
 
             const studeySessions = await studySessionsCollection
@@ -109,11 +109,38 @@ async function run() {
       app.post("/add-study-session", async (req, res) => {
          try {
             const data = { requestAttempt: 1, ...req.body };
-            const result = await studySessionsCollection.insertOne(data);
+            await studySessionsCollection.insertOne(data);
             res.status(200).send({
                success: true,
                message:
-                  "Succesfully added a new study session! Please wait until the admin approves.",
+                  "Succesfully submitted a new study session! Please wait until the admin approves.",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // review rejected session request by tutor
+      app.patch("/review-rejected-session/:id", async (req, res) => {
+         try {
+            const updatedData = {
+               $inc: { requestAttempt: 1 },
+               $set: {
+                  status: "pending",
+               },
+            };
+            await studySessionsCollection.updateOne(
+               {
+                  _id: new ObjectId(req.params.id),
+               },
+               updatedData
+            );
+            res.status(200).send({
+               success: true,
+               message:
+                  "Succesfully sent a review request. Please wait until the admin approves.",
             });
          } catch (error) {
             res.status(500).send({
