@@ -83,6 +83,20 @@ async function run() {
          }
       });
 
+      // get sessions details
+      app.get("/get-session-details/:id", async (req, res) => {
+         try {
+            const data = await studySessionsCollection.findOne({
+               _id: new ObjectId(req.params.id),
+            });
+            res.send(data);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
       // ---------------------------------------------------------------------
       // -------------------- API for Tutors -------------------
       // ------ API for create session page --------
@@ -152,6 +166,53 @@ async function run() {
       // ---------------------------------------------------------------------
       // -------------------- API for students -------------------
       // ------ API for notes page --------
+      // get all approved sessions - 9 data every time
+      app.get("/get-all-sessions", async (req, res) => {
+         const { page = 1, searchValue = "", filterBy = "all" } = req.query;
+         const today = new Date();
+         const todayString = today.toISOString();
+         const query = {
+            status: "approved",
+            ...(searchValue && {
+               sessionTitle: { $regex: searchValue, $options: "i" },
+            }),
+            ...(filterBy === "ongoing" && {
+               registrationEndDate: { $gte: todayString },
+            }),
+            ...(filterBy === "closed" && {
+               registrationEndDate: { $lt: todayString },
+            }),
+         };
+         const totalDataFound = await studySessionsCollection.countDocuments(
+            query
+         );
+         const sessions = await studySessionsCollection
+            .find(query)
+            .skip((page - 1) * 9)
+            .limit(9)
+            .toArray();
+         res.status(200).send({
+            totalDataFound,
+            sessions,
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalDataFound / 9),
+         });
+      });
+      // get latest sessions - 6 data
+      app.get("/latest-sessions", async (req, res) => {
+         try {
+            const latestSessions = await studySessionsCollection
+               .find({ status: "approved" })
+               .sort({ registrationEndDate: -1 })
+               .limit(6)
+               .toArray();
+            res.send(latestSessions);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
       // get notes of specific student
       app.get("/student-notes/:email", async (req, res) => {
          try {
