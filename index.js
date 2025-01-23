@@ -45,7 +45,6 @@ async function run() {
       app.get("/", async (req, res) =>
          res.send("Danke, dass du mich geschlagen hast.")
       );
-
       //    save user to users_collection
       app.post("/post-user", async (req, res) => {
          try {
@@ -72,13 +71,27 @@ async function run() {
             });
          }
       });
-
       //    get user role
       app.get("/get-user-role", async (req, res) => {
          try {
             const query = { userEmail: req.query.email };
             const user = await usersCollection.findOne(query);
             res.send(user);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // get available sessions count by tutor email
+      app.get("/approved-sessions-count", async (req, res) => {
+         const { email } = req.query;
+         try {
+            const count = await studySessionsCollection.countDocuments({
+               status: "approved",
+               tutorEmail: email,
+            });
+            res.send({ count });
          } catch (error) {
             res.status(500).send({
                message: `Internal Server Error - ${error.message}`,
@@ -257,12 +270,75 @@ async function run() {
 
       // get all materials
       app.get("/get-tutor-materials/:email", async (req, res) => {
-         const result = await allMaterialsCollection
-            .find({
-               tutorEmail: req.params.email,
-            })
-            .toArray();
-         res.send(result);
+         try {
+            const result = await allMaterialsCollection
+               .find({
+                  tutorEmail: req.params.email,
+               })
+               .toArray();
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // get a single material for update
+      app.get("/get-tutor-material/:id", async (req, res) => {
+         try {
+            const material = await allMaterialsCollection.findOne({
+               _id: new ObjectId(req.params.id),
+            });
+            res.send(material);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // update material data
+      app.patch("/update-material/:id", async (req, res) => {
+         try {
+            const { materialTitle, materialDriveLink } = req.body;
+            await allMaterialsCollection.updateOne(
+               {
+                  _id: new ObjectId(req.params.id),
+               },
+               {
+                  $set: {
+                     materialTitle,
+                     materialDriveLink,
+                  },
+               }
+            );
+            res.status(200).send({
+               success: true,
+               message: "Successfully saved your changes.",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      // delete material by tutor
+      app.delete("/delete-material/:id", async (req, res) => {
+         try {
+            await allMaterialsCollection.deleteOne({
+               _id: new ObjectId(req.params.id),
+            });
+            res.status(200).send({
+               success: true,
+               message: "Your material has been deleted",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
       });
 
       // ---------------------------------------------------------------------
@@ -462,6 +538,33 @@ async function run() {
             res.status(200).send({
                success: true,
                message: "Successfully deleted the session",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // get all materials
+      app.get("/all-materials", async (req, res) => {
+         try {
+            const result = await allMaterialsCollection.find().toArray();
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // delete material by admin
+      app.delete("/delete-material-by-admin/:id", async (req, res) => {
+         try {
+            await allMaterialsCollection.deleteOne({
+               _id: new ObjectId(req.params.id),
+            });
+            res.status(200).send({
+               success: true,
+               message: "Your material has been deleted",
             });
          } catch (error) {
             res.status(500).send({
