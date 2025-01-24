@@ -40,6 +40,12 @@ async function run() {
       const allMaterialsCollection = database.collection(
          "all_materials_collection"
       );
+      const allBookedCollection = database.collection(
+         "all_booked_sessions_collection"
+      );
+      const allStudentReviewsCollection = database.collection(
+         "student_reviews_collection"
+      );
 
       //    Home route
       app.get("/", async (req, res) =>
@@ -400,6 +406,97 @@ async function run() {
                query,
                updatedData
             );
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // get student booked sessions
+      app.get("/student-booked-sessions/:email", async (req, res) => {
+         try {
+            const result = await allBookedCollection
+               .find({ studentEmail: req.params?.email })
+               .toArray();
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // already booked sessions
+      app.get("/already-booked-session", async (req, res) => {
+         try {
+            const { id, user } = req.query;
+            const result = await allBookedCollection.findOne({
+               sessionId: id,
+               studentEmail: user,
+            });
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // add booked session
+      app.post("/all-booked-sessions", async (req, res) => {
+         try {
+            const bookedData = req.body;
+            await allBookedCollection.insertOne(bookedData);
+            res.status(200).send({
+               success: true,
+               message: `You have successfully booked the session. ${
+                  bookedData.paymentStatus === "incomplete"
+                     ? "Please complete your payment to access session materials"
+                     : ""
+               } `,
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // add review
+      app.post("/add-review", async (req, res) => {
+         try {
+            await allStudentReviewsCollection.insertOne({ ...req.body });
+            res.status(200).send({
+               success: true,
+               message: "Review added successfully. Thanks for submitting",
+            });
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // already submitted review
+      app.get("/already-submitted-review", async (req, res) => {
+         try {
+            const { id, user } = req.query;
+            const result = await allStudentReviewsCollection.findOne({
+               sessionId: id,
+               studentEmail: user,
+            });
+            res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+      // already submitted review
+      app.get("/get-reviews/:id", async (req, res) => {
+         try {
+            const result = await allStudentReviewsCollection
+               .find({
+                  sessionId: req.params.id,
+               })
+               .toArray();
             res.send(result);
          } catch (error) {
             res.status(500).send({
