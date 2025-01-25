@@ -78,7 +78,7 @@ async function run() {
          }
       });
       //    get user role
-      app.get("/get-user-role", async (req, res) => {
+      app.get("/get-user-with-role", async (req, res) => {
          try {
             const query = { userEmail: req.query.email };
             const user = await usersCollection.findOne(query);
