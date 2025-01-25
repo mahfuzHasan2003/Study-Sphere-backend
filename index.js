@@ -172,6 +172,36 @@ async function run() {
             });
          }
       });
+      // get the average review
+      app.get("/get-average-review/:id", async (req, res) => {
+         try {
+            const avRating = await allStudentReviewsCollection
+               .aggregate([
+                  {
+                     $match: { sessionId: req.params.id },
+                  },
+                  {
+                     $group: {
+                        _id: null,
+                        averageRating: { $avg: "$rating" },
+                     },
+                  },
+                  {
+                     $project: {
+                        _id: 0,
+                        averageRating: 1,
+                     },
+                  },
+               ])
+               .next();
+            console.log(avRating);
+            res.send(avRating);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
 
       // ---------------------------------------------------------------------
       // -------------------- API for Tutors -------------------
