@@ -504,6 +504,27 @@ async function run() {
             });
          }
       });
+      // get materials for students
+      app.get("/get-student-materials/:email", async (req, res) => {
+         try {
+            const bookedSessions = await allBookedCollection
+               .find({ studentEmail: req.params.email })
+               .toArray();
+            const bookedSessionIds = bookedSessions?.map(
+               (session) => session.sessionId
+            );
+            const materials = await allMaterialsCollection
+               .find({
+                  sessionId: { $in: bookedSessionIds },
+               })
+               .toArray();
+            res.send(materials);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
 
       // ---------------------------------------------------------------------
       // -------------------- API for admin -------------------
