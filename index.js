@@ -158,18 +158,6 @@ async function run() {
             });
          }
       });
-      //    get user role
-      app.get("/get-user-with-role", async (req, res) => {
-         try {
-            const query = { userEmail: req.query.email };
-            const user = await usersCollection.findOne(query);
-            res.send(user);
-         } catch (error) {
-            res.status(500).send({
-               message: `Internal Server Error - ${error.message}`,
-            });
-         }
-      });
       // get available sessions count by tutor email
       app.get("/approved-sessions-count", async (req, res) => {
          const { email } = req.query;
@@ -184,6 +172,15 @@ async function run() {
                message: `Internal Server Error - ${error.message}`,
             });
          }
+      });
+      // get 12 tutors
+      app.get("/top-tutors", async (req, res) => {
+         const tutors = await usersCollection
+            .find({ userRole: "tutor" })
+            .project({ userName: 1, userPhotoURL: 1, userEmail: 1 })
+            .limit(12)
+            .toArray();
+         res.send(tutors);
       });
       // get all approved sessions - 9 data every time
       app.get("/get-all-sessions", async (req, res) => {
@@ -289,6 +286,19 @@ async function run() {
                })
                .toArray();
             res.send(result);
+         } catch (error) {
+            res.status(500).send({
+               message: `Internal Server Error - ${error.message}`,
+            });
+         }
+      });
+
+      //    get user role
+      app.get("/get-user-with-role", verifyToken, async (req, res) => {
+         try {
+            const query = { userEmail: req.query.email };
+            const user = await usersCollection.findOne(query);
+            res.send(user);
          } catch (error) {
             res.status(500).send({
                message: `Internal Server Error - ${error.message}`,
@@ -747,7 +757,12 @@ async function run() {
          verifyAdmin,
          async (req, res) => {
             try {
-               const { searchQuery = "", roleFilter = "all" } = req.query;
+               const {
+                  searchQuery = "",
+                  roleFilter = "all",
+                  page = 1,
+                  limit = 10,
+               } = req.query;
                const { email = "" } = req.params;
                const filters = {
                   userEmail: { $ne: email },
@@ -763,8 +778,19 @@ async function run() {
                if (roleFilter !== "all") {
                   filters.userRole = roleFilter;
                }
-               const users = await usersCollection.find(filters).toArray();
-               res.send(users);
+               const totalUsers = await usersCollection.countDocuments(filters);
+
+               const users = await usersCollection
+                  .find(filters)
+                  .skip((page - 1) * limit)
+                  .limit(Number(limit))
+                  .toArray();
+               res.send({
+                  totalUsers,
+                  users,
+                  currentPage: Number(page),
+                  totalPages: Math.ceil(totalUsers / limit),
+               });
             } catch (error) {
                res.status(500).send({
                   message: `Internal Server Error - ${error.message}`,
