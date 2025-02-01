@@ -259,13 +259,13 @@ async function run() {
                   {
                      $group: {
                         _id: null,
-                        averageRating: { $round: [{ $avg: "$rating" }, 1] },
+                        averageRating: { $avg: "$rating" },
                      },
                   },
                   {
                      $project: {
                         _id: 0,
-                        averageRating: 1,
+                        averageRating: { $round: ["$averageRating", 1] },
                      },
                   },
                ])
