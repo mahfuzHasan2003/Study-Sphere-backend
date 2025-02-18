@@ -11,6 +11,7 @@ const stripe = require("stripe")(process.env.stripe_secret);
 app.use(
   cors({
     origin: ["http://localhost:5173", "https://study-sphere-c5d1e.web.app"],
+    credentials: true,
   })
 );
 app.use(express.json());
@@ -133,11 +134,11 @@ async function run() {
       }
     );
 
-    //    Home route
+    // Home route
     app.get("/", async (req, res) =>
       res.send("Danke, dass du mich geschlagen hast.")
     );
-    //    save user to users_collection
+    // save user to users_collection
     app.post("/post-user", async (req, res) => {
       try {
         const userData = req.body;
@@ -178,14 +179,24 @@ async function run() {
         });
       }
     });
-    // get 12 tutors
+    // get random 10 tutors who have session added
     app.get("/top-tutors", async (req, res) => {
       const tutors = await usersCollection
-        .find({ userRole: "tutor" })
-        .project({ userName: 1, userPhotoURL: 1, userEmail: 1 })
-        .limit(12)
+        .aggregate([
+          { $match: { userRole: "tutor" } },
+          { $sample: { size: 25 } },
+        ])
         .toArray();
-      res.send(tutors);
+      const tutorsWithSessions = await Promise.all(
+        tutors.map(async (tutor) => {
+          const sessions = await studySessionsCollection
+            .find({ tutorEmail: tutor.userEmail })
+            .limit(1)
+            .toArray();
+          return sessions.length > 0 ? tutor : null;
+        })
+      );
+      res.send(tutorsWithSessions.filter(Boolean).slice(0, 10));
     });
     // get all approved sessions - 9 data every time
     app.get("/get-all-sessions", async (req, res) => {
@@ -222,15 +233,31 @@ async function run() {
         totalPages: Math.ceil(totalDataFound / 9),
       });
     });
-    // get featured sessions - 6 data
-    app.get("/featured-sessions", async (req, res) => {
+    // get ongoing sessions - 6 data
+    app.get("/ongoing-sessions", async (req, res) => {
       try {
         const todayString = new Date().toISOString();
         const latestSessions = await studySessionsCollection
           .find({
             status: "approved",
-            classStartDate: { $gte: todayString },
+            registrationEndDate: { $gte: todayString },
+            registrationStartDate: { $lte: todayString },
           })
+          .limit(6)
+          .toArray();
+        res.send(latestSessions);
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+    });
+    // get featured sessions - 6 data
+    app.get("/featured-sessions", async (req, res) => {
+      try {
+        const latestSessions = await studySessionsCollection
+          .find()
+          .sort({ _id: -1 })
           .limit(6)
           .toArray();
         res.send(latestSessions);
@@ -247,6 +274,20 @@ async function run() {
           _id: new ObjectId(req.params.id),
         });
         res.send(data);
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+    });
+    // specific tutor sessions
+    app.get("/tutor/:email/sessions", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const sessions = await studySessionsCollection
+          .find({ tutorEmail: email })
+          .toArray();
+        res.send(sessions);
       } catch (error) {
         res.status(500).send({
           message: `Internal Server Error - ${error.message}`,
@@ -298,10 +339,22 @@ async function run() {
       }
     });
 
-    //    get user role
+    // get logged in user details with role
     app.get("/get-user-with-role", async (req, res) => {
       try {
         const query = { userEmail: req.query.email };
+        const user = await usersCollection.findOne(query);
+        res.send(user);
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+    });
+    // get a user details with role
+    app.get("/get-specific-user/:email", async (req, res) => {
+      try {
+        const query = { userEmail: req.params.email };
         const user = await usersCollection.findOne(query);
         res.send(user);
       } catch (error) {
