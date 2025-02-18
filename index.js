@@ -8,7 +8,11 @@ require("dotenv").config();
 
 const stripe = require("stripe")(process.env.stripe_secret);
 
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "https://study-sphere-c5d1e.web.app"],
+  })
+);
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_user}:${process.env.DB_password}@cluster0.xggde.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
