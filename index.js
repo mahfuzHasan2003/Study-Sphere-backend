@@ -120,19 +120,92 @@ async function run() {
         const session = await studySessionsCollection.findOne({
           _id: new ObjectId(sessionId),
         });
+
         if (!session) res.status(400).send({ message: "session not found" });
+
         const amount = parseInt(session?.registrationFee) * 100;
 
-        const { client_secret } = await stripe.paymentIntents.create({
+        // Get tutor's connected Stripe account ID
+        const sessionTutor = await usersCollection.findOne({ userEmail: session?.tutorEmail })
+
+        const paymentIntent = await stripe.paymentIntents.create({
           amount,
           currency: "usd",
           payment_method_types: ["card"],
+
+          application_fee_amount: Math.floor(amount * 0.3),
+          transfer_data: {
+            destination: sessionTutor?.tutorStripeId,
+          },
         });
+
         res.send({
-          clientSecret: client_secret,
+          clientSecret: paymentIntent.client_secret, tutorStripeId: sessionTutor?.tutorStripeId
         });
       }
     );
+
+    // Create a connected account
+    app.post("/create-stripe-account-link", verifyToken, verifyTutor, async (req, res) => {
+      try {
+
+        // getting a stripe connect account
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "US",
+        });
+
+        // Saving the account ID in DB
+        const { userID } = req.body;
+        await usersCollection.updateOne({ _id: new ObjectId(userID) }, {
+          $set: { tutorStripeId: account.id }
+        })
+
+        // getting a stripe connect account for TUTOR
+        const accountLink = await stripe.accountLinks.create({
+          account: account.id,
+          refresh_url: `${process.env.Frontend_Base_URL}/dashboard/my-balance`,
+          return_url: `${process.env.Frontend_Base_URL}/dashboard/my-balance`,
+          type: 'account_onboarding',
+        });
+
+        res.status(200).json({
+          url: accountLink.url,
+        });
+
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+    });
+
+    // get admin balance
+    app.get("/balance/admin", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const balance = await stripe.balance.retrieve();
+        res.send(balance);
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+    })
+
+    // get tutor balance
+    app.get("/balance/tutor/:id", verifyToken, verifyTutor, async (req, res) => {
+      try {
+        const balance = await stripe.balance.retrieve({ stripeAccount: req.params.id });
+        res.send(balance);
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+
+    })
+
+
 
     // Home route
     app.get("/", async (req, res) =>
@@ -190,7 +263,7 @@ async function run() {
       const tutorsWithSessions = await Promise.all(
         tutors.map(async (tutor) => {
           const sessions = await studySessionsCollection
-            .find({ tutorEmail: tutor.userEmail })
+            .find({ status: "approved", tutorEmail: tutor.userEmail })
             .limit(1)
             .toArray();
           return sessions.length > 0 ? tutor : null;
@@ -256,7 +329,7 @@ async function run() {
     app.get("/featured-sessions", async (req, res) => {
       try {
         const latestSessions = await studySessionsCollection
-          .find()
+          .find({ status: "approved" })
           .sort({ _id: -1 })
           .limit(6)
           .toArray();
@@ -285,7 +358,7 @@ async function run() {
       try {
         const { email } = req.params;
         const sessions = await studySessionsCollection
-          .find({ tutorEmail: email })
+          .find({ tutorEmail: email, status: "approved" })
           .toArray();
         res.send(sessions);
       } catch (error) {
@@ -364,6 +437,25 @@ async function run() {
       }
     });
 
+    app.patch("/update-profile/:email", async (req, res) => {
+      try {
+        const { email } = req.params;
+        const updateFields = req.body;
+        await usersCollection.updateOne(
+          { userEmail: email },
+          {
+            $set: { ...updateFields },
+          }
+        );
+        res
+          .status(200)
+          .send({ success: true, message: "Data updated successfully" });
+      } catch (error) {
+        res.status(500).send({
+          message: `Internal Server Error - ${error.message}`,
+        });
+      }
+    });
     // ---------------------------------------------------------------------
     // -------------------- API for students -------------------
     // ------ API for notes page --------
@@ -416,11 +508,10 @@ async function run() {
           await allBookedCollection.insertOne(bookedData);
           res.status(200).send({
             success: true,
-            message: `You have successfully booked the session. ${
-              bookedData.paymentStatus === "incomplete"
-                ? "Please complete your payment to access session materials"
-                : ""
-            } `,
+            message: `You have successfully booked the session. ${bookedData.paymentStatus === "incomplete"
+              ? "Please complete your payment to access session materials"
+              : ""
+              } `,
           });
         } catch (error) {
           res.status(500).send({
@@ -947,9 +1038,8 @@ async function run() {
           );
           res.status(200).send({
             success: true,
-            message: `Successfully ${
-              action === "approve" ? "approved" : "rejected"
-            } the session`,
+            message: `Successfully ${action === "approve" ? "approved" : "rejected"
+              } the session`,
           });
         } catch (error) {
           res.status(500).send({
